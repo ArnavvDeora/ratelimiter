@@ -35,3 +35,26 @@ def test_cost_greater_than_tokens_is_refused_and_not_charged():
 def test_rejects_bad_config(cap, rate):
     with pytest.raises(ValueError):
         TokenBucket(cap, rate)
+
+
+def test_retry_after_is_zero_when_tokens_are_available():
+    assert TokenBucket(2, 2, FakeClock()).retry_after() == 0.0
+
+
+def test_retry_after_counts_down_as_tokens_refill():
+    clock = FakeClock()
+    bucket = TokenBucket(1, 2, clock)
+    bucket.allow()
+    assert bucket.retry_after() == 0.5
+    clock.advance(0.25)
+    assert bucket.retry_after() == 0.25
+    clock.advance(0.25)
+    assert bucket.retry_after() == 0.0
+
+
+def test_retry_after_scales_with_cost():
+    clock = FakeClock()
+    bucket = TokenBucket(4, 2, clock)
+    for _ in range(4):
+        bucket.allow()
+    assert bucket.retry_after(cost=3) == 1.5
