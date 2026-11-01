@@ -1,0 +1,44 @@
+name: qi change-quality check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  qi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Analyse this pull request with qi
+        id: qi
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -o pipefail
+          curl -sS --max-time 240 -X POST https://myco-qi-demo.vercel.app/api/analyze_pr \
+            -H 'Content-Type: application/json' \
+            -d "{\"url\": \"$PR_URL\", \"fresh\": true}" -o result.json -w '%{http_code}' > http_code
+          echo "HTTP $(cat http_code)"
+          if [ "$(cat http_code)" != "200" ]; then
+            printf '<!-- qi-report -->\n## 🔎 qi could not analyse this PR\n\n```\n%s\n```\n' "$(jq -r '.error // .' result.json 2>/dev/null || cat result.json)" > report.md
+            echo "status=error" >> "$GITHUB_OUTPUT"
+          else
+            jq -r .markdown result.json > report.md
+            echo "status=$(jq -r .status result.json)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post the report on the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr comment "$PR_URL" --body-file report.md --edit-last || gh pr comment "$PR_URL" --body-file report.md
+
+      - name: Fail the check if qi found problems
+        if: steps.qi.outputs.status == 'needs_attention'
+        run: |
+          echo "::error::qi found validation gaps in this PR. See the PR comment for the evidence."
+          exit 1
