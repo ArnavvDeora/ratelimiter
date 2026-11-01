@@ -27,6 +27,12 @@ class TokenBucket:
             return True
         return False
 
+    def retry_after(self, cost: int = 1) -> float:
+        """Seconds until a request costing `cost` would be allowed (0.0 if allowed now)."""
+        self._refill()
+        deficit = cost - self._tokens
+        return max(0.0, deficit / self.rate)
+
     @property
     def tokens(self) -> float:
         self._refill()
