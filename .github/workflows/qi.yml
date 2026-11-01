@@ -37,8 +37,12 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: gh pr comment "$PR_URL" --body-file report.md --edit-last || gh pr comment "$PR_URL" --body-file report.md
 
-      - name: Fail the check if qi found problems
+      - name: Fail the check if qi found execution evidence of a gap
         if: steps.qi.outputs.status == 'needs_attention'
         run: |
-          echo "::error::qi found validation gaps in this PR. See the PR comment for the evidence."
+          echo "::error::qi found validation gaps in this PR (backed by test runs). See the PR comment."
           exit 1
+
+      - name: Flag advisory findings without blocking
+        if: steps.qi.outputs.status == 'advisory'
+        run: echo "::warning::qi has advisory findings (changes the description doesn't mention). Worth a look; not blocking."
